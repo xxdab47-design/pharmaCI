@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PharmaSanté CI | Plateforme Santé & Pharmacies de Garde en Côte d'Ivoire</title>
+  
+  <!-- SEO & Meta -->
+  <meta name="description" content="Trouvez les pharmacies de garde, vérifiez les stocks de médicaments en FCFA, réservez des consultations médicales et payez par Mobile Money (Wave, Orange, MTN, Moov) à Abidjan et en Côte d'Ivoire.">
+  <meta name="theme-color" content="#059669">
+
+  <!-- Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS & JS for Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Canvas Confetti for Payment Success -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669', // Primary Health Green
+              700: '#047857',
+              800: '#065f46',
+            },
+            ciorange: {
+              500: '#F97316', // Ivoirian Orange CTA
+              600: '#EA580C',
+            },
+            medblue: {
+              500: '#0284C7', // Medical Blue
+              600: '#0369A1',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar & Micro Animations */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .glass-effect {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .pulse-glow {
+      box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4);
+      animation: pulse-ring 2s infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(5, 150, 105, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0); }
+    }
+
+    /* OCR Scanner Animation */
+    .scanner-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, transparent, #059669, #F97316, transparent);
+      box-shadow: 0 0 15px #059669;
+      animation: scan 2.5s infinite ease-in-out;
+    }
+    @keyframes scan {
+      0% { top: 0%; }
+      50% { top: 95%; }
+      100% { top: 0%; }
+    }
+
+    /* Map Leaflet custom styling */
+    .leaflet-popup-content-wrapper {
+      border-radius: 1rem !important;
+      padding: 4px !important;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1) !important;
+    }
+    .leaflet-popup-tip { background: white !important; }
+  </style>
+</head>
+<body class="h-full font-sans text-slate-800 antialiased bg-slate-50 flex flex-col selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP EMERGENCY BANNER (TOGGLEABLE) -->
+  <div id="emergency-bar" class="bg-gradient-to-r from-red-600 via-ciorange-500 to-amber-600 text-white text-xs sm:text-sm py-2 px-4 shadow-sm transition-all duration-300">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 font-medium overflow-hidden">
+        <span class="flex h-2.5 w-2.5 relative flex-shrink-0">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+        </span>
+        <span class="truncate font-semibold">Numéros d'Urgence Côte d'Ivoire :</span>
+        <div class="hidden sm:flex items-center gap-4 text-xs font-bold">
+          <a href="tel:185" class="hover:underline flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full"><i data-lucide="phone-call" class="w-3 h-3"></i> SAMU: 185</a>
+          <a href="tel:180" class="hover:underline flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full"><i data-lucide="flame" class="w-3 h-3"></i> Pompiers: 180</a>
+          <a href="tel:170" class="hover:underline flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full"><i data-lucide="shield" class="w-3 h-3"></i> Police: 170</a>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="tel:185" class="sm:hidden text-xs bg-white text-red-600 px-2.5 py-1 rounded-full font-bold shadow-xs">185 SAMU</a>
+        <button onclick="document.getElementById('emergency-bar').style.display='none'" class="hover:bg-white/20 p-1 rounded-full text-white/80 hover:text-white transition">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN HEADER NAVBAR -->
+  <header class="sticky top-0 z-30 glass-effect border-b border-slate-200/80 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('map')">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-brand-600/30">
+          <i data-lucide="cross" class="w-6 h-6 stroke-[2.5]"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-display font-extrabold text-xl tracking-tight text-slate-900">PharmaSanté</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-ciorange-500 text-white rounded-md uppercase tracking-wider">CI</span>
+          </div>
+          <p class="text-[11px] text-slate-500 font-medium -mt-1 hidden sm:block">Pharmacies de garde & Santé en Côte d'Ivoire</p>
+        </div>
+      </div>
+
+      <!-- Desktop Navigation Links -->
+      <nav class="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-2xl border border-slate-200">
+        <button id="nav-btn-map" onclick="switchTab('map')" class="nav-tab-btn px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all text-brand-700 bg-white shadow-xs">
+          <i data-lucide="map-pin" class="w-4 h-4"></i>
+          <span>Pharmacies & CHU</span>
+        </button>
+        <button id="nav-btn-stock" onclick="switchTab('stock')" class="nav-tab-btn px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900">
+          <i data-lucide="pill" class="w-4 h-4"></i>
+          <span>Stock & Ordonnance</span>
+        </button>
+        <button id="nav-btn-rdv" onclick="switchTab('rdv')" class="nav-tab-btn px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+          <span>Rendez-vous Médical</span>
+        </button>
+        <button id="nav-btn-carnet" onclick="switchTab('carnet')" class="nav-tab-btn px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all text-slate-600 hover:text-slate-900">
+          <i data-lucide="user-check" class="w-4 h-4"></i>
+          <span>Mon Carnet</span>
+        </button>
+      </nav>
+
+      <!-- Right Header Actions -->
+      <div class="flex items-center gap-3">
+        <!-- Commune Selector Dropdown -->
+        <div class="relative hidden sm:block">
+          <select id="commune-filter" onchange="handleCommuneChange(this.value)" class="appearance-none bg-slate-100 hover:bg-slate-200/70 border border-slate-200 rounded-xl px-3 py-1.5 pr-8 text-xs font-semibold text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option value="all">📍 Abidjan (Toutes communes)</option>
+            <option value="Cocody">Cocody (Riviera, Angré, II Pl.)</option>
+            <option value="Yopougon">Yopougon (Maroc, Bel Air)</option>
+            <option value="Marcory">Marcory (Zone 4, Résidentiel)</option>
+            <option value="Plateau">Plateau (Centre des affaires)</option>
+            <option value="Treichville">Treichville</option>
+          </select>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+        </div>
+
+        <!-- Emergency Quick Call Button -->
+        <a href="tel:185" class="bg-ciorange-500 hover:bg-ciorange-600 text-white font-semibold text-xs sm:text-sm px-3.5 py-2 rounded-xl shadow-md shadow-ciorange-500/20 flex items-center gap-2 transition-transform active:scale-95">
+          <i data-lucide="phone-call" class="w-4 h-4"></i>
+          <span class="hidden xs:inline">Urgence 185</span>
+        </a>
+
+        <!-- Patient Profile Avatar Quick Link -->
+        <button onclick="switchTab('carnet')" class="w-9 h-9 rounded-xl bg-brand-100 border border-brand-200 text-brand-800 font-bold text-xs flex items-center justify-center hover:ring-2 hover:ring-brand-500 transition shadow-xs">
+          JK
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- APP CONTENT CONTAINERS -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 pb-24 md:pb-8 flex flex-col">
+
+    <!-- ========================================== -->
+    <!-- MODULE 1: CARTE & PHARMACIES DE GARDE       -->
+    <!-- ========================================== -->
+    <section id="tab-map" class="tab-content flex-1 flex flex-col gap-4">
+      
+      <!-- Top Filters & Search Bar -->
+      <div class="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        
+        <!-- Filter Tabs -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 no-scrollbar">
+          <button onclick="filterMapCategory('all')" id="map-filter-all" class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-brand-600 text-white shadow-xs">
+            🏢 Tous les établissements
+          </button>
+          <button onclick="filterMapCategory('garde')" id="map-filter-garde" class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            🟢 Pharmacies de Garde (24h/24)
+          </button>
+          <button onclick="filterMapCategory('chu')" id="map-filter-chu" class="map-cat-btn px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-300 flex items-center gap-1.5">
+            <i data-lucide="hospital" class="w-3.5 h-3.5 text-sky-600"></i>
+            🏥 CHU & Polycliniques
+          </button>
+        </div>
+
+        <!-- Search Bar input -->
+        <div class="relative min-w-[260px]">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input type="text" id="map-search-input" onkeyup="searchPharmacies(this.value)" placeholder="Chercher un quartier, hôpital, pharmacie..." class="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 focus:bg-white transition">
+          <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Main Map Grid (Interactive Leaflet Map + Cards List) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-[500px]">
+        
+        <!-- Interactive Map Container (7 cols desktop) -->
+        <div class="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-xs relative flex flex-col h-[400px] lg:h-auto min-h-[380px]">
+          
+          <!-- Map Canvas -->
+          <div id="leaflet-map" class="w-full h-full z-10"></div>
+
+          <!-- Floating Map Legend -->
+          <div class="absolute bottom-4 left-4 z-20 glass-effect p-2.5 rounded-xl border border-slate-200/80 shadow-md text-[11px] font-semibold space-y-1 hidden sm:block">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-600 border border-white"></span> Pharmacie de Garde (Ouverte)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-teal-600 border border-white"></span> Pharmacie Standard</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-sky-600 border border-white"></span> CHU & Polyclinique</div>
+          </div>
+
+          <!-- Geolocation Floating Button -->
+          <button onclick="getUserLocation()" class="absolute top-4 right-4 z-20 bg-white hover:bg-slate-50 text-slate-700 p-2.5 rounded-xl border border-slate-200 shadow-md flex items-center gap-2 text-xs font-bold transition">
+            <i data-lucide="crosshair" class="w-4 h-4 text-brand-600"></i>
+            <span class="hidden xs:inline">Ma Position</span>
+          </button>
+
+        </div>
+
+        <!-- Establishments Cards List (5 cols desktop) -->
+        <div class="lg:col-span-5 flex flex-col gap-3 max-h-[550px] overflow-y-auto pr-1" id="establishment-list">
+          <!-- Dynamically populated by JS -->
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- MODULE 2: STOCK & ENVOI D'ORDONNANCE        -->
+    <!-- ========================================== -->
+    <section id="tab-stock" class="tab-content hidden flex-1 flex flex-col gap-6">
+      
+      <!-- Sub Tabs Toggle -->
+      <div class="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-2 max-w-md mx-auto w-full">
+        <button id="subtab-btn-search" onclick="switchStockSubtab('search')" class="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-xs">
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>Recherche Médicament</span>
+        </button>
+        <button id="subtab-btn-scan" onclick="switchStockSubtab('scan')" class="flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900">
+          <i data-lucide="camera" class="w-4 h-4"></i>
+          <span>Scan d'Ordonnance AI</span>
+        </button>
+      </div>
+
+      <!-- SUB-TAB 1: MANUAL MEDICINE SEARCH & STOCKS -->
+      <div id="stock-subtab-search" class="space-y-4">
+        
+        <!-- Search Input Box -->
+        <div class="bg-gradient-to-r from-brand-700 to-teal-800 p-6 rounded-3xl text-white shadow-lg relative overflow-hidden">
+          <div class="absolute -right-10 -bottom-10 opacity-10 text-white pointer-events-none">
+            <i data-lucide="pill" class="w-64 h-64"></i>
+          </div>
+          <div class="max-w-2xl relative z-10 space-y-3">
+            <span class="px-2.5 py-1 bg-white/20 rounded-full text-[11px] font-bold uppercase tracking-wider">Base Nationale FCFA</span>
+            <h2 class="text-xl sm:text-2xl font-display font-extrabold">Vérifiez la disponibilité & le prix de vos médicaments</h2>
+            <p class="text-xs text-brand-100">Trouvez instantanément la pharmacie la plus proche à Abidjan ayant votre produit en stock.</p>
+            
+            <div class="pt-2">
+              <div class="relative">
+                <i data-lucide="search" class="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="drug-search-input" onkeyup="handleDrugSearch(this.value)" placeholder="Tapez un produit (ex: Paracétamol, Coartem, Amoxicilline, Efferalgan)..." class="w-full pl-12 pr-4 py-3.5 bg-white text-slate-900 font-medium text-sm rounded-2xl border-0 shadow-lg focus:ring-4 focus:ring-brand-400/50 focus:outline-none">
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs text-brand-100 pt-1 flex-wrap">
+              <span class="font-semibold">Suggestions rapides:</span>
+              <button onclick="setDrugSearch('Paracétamol')" class="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium transition">Paracétamol 1g</button>
+              <button onclick="setDrugSearch('Coartem')" class="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium transition">Coartem 80/480</button>
+              <button onclick="setDrugSearch('Amoxicilline')" class="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium transition">Amoxicilline 500mg</button>
+              <button onclick="setDrugSearch('Spasfon')" class="bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg text-white font-medium transition">Spasfon Lyoc</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stock Results Cards List -->
+        <div id="drug-results-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamically filled by JS -->
+        </div>
+
+      </div>
+
+      <!-- SUB-TAB 2: PRESCRIPTION SCAN / UPLOAD -->
+      <div id="stock-subtab-scan" class="hidden space-y-6 max-w-3xl mx-auto w-full">
+        
+        <div class="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-md text-center space-y-6">
+          <div class="space-y-2">
+            <div class="w-14 h-14 bg-brand-50 text-brand-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+              <i data-lucide="scan-line" class="w-8 h-8"></i>
+            </div>
+            <h3 class="font-display text-xl font-bold text-slate-900">Numériser ou Téléverser une Ordonnance</h3>
+            <p class="text-xs text-slate-500 max-w-md mx-auto">Notre intelligence artificielle analyse le document médical manuscrit et trouve la pharmacie de garde la plus proche proposant l'ensemble de votre traitement.</p>
+          </div>
+
+          <!-- Drag and Drop Zone -->
+          <div id="drop-zone" onclick="triggerFileInput()" class="border-2 border-dashed border-brand-300 hover:border-brand-500 bg-brand-50/30 hover:bg-brand-50/60 p-8 rounded-2xl cursor-pointer transition flex flex-col items-center justify-center gap-3 relative">
+            <input type="file" id="prescription-file" accept="image/*,.pdf" class="hidden" onchange="handlePrescriptionFile(this.files)">
+            <div class="w-12 h-12 rounded-full bg-white text-brand-600 flex items-center justify-center shadow-xs">
+              <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+            </div>
+            <div class="text-xs font-semibold text-slate-700">
+              <span class="text-brand-600 font-bold">Cliquez ici</span> ou glissez-déposez votre photo d'ordonnance
+            </div>
+            <span class="text-[11px] text-slate-400">Formats supportés : JPG, PNG, PDF (Max 10Mo)</span>
+          </div>
+
+          <!-- Scanning Simulation Preview (Hidden initially) -->
+          <div id="scan-preview-box" class="hidden relative rounded-2xl overflow-hidden border border-slate-300 bg-slate-900 p-4 text-left shadow-lg">
+            <div class="scanner-line"></div>
+            <div class="flex items-center gap-4">
+              <img id="preview-img" src="" alt="Ordonnance" class="w-20 h-24 object-cover rounded-lg border border-slate-700">
+              <div class="space-y-2 text-white flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                  <span class="text-xs font-bold text-amber-400 uppercase tracking-wider" id="scan-status-text">Analyse OCR en cours...</span>
+                </div>
+                <h4 class="text-sm font-semibold">Lecture de l'ordonnance médicale...</h4>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div id="scan-progress-bar" class="bg-brand-500 h-full w-1/3 transition-all duration-500"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Detected Medicines Result Box (Hidden initially) -->
+          <div id="scan-results-box" class="hidden text-left bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
+            <div class="flex items-center justify-between">
+              <h4 class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <i data-lucide="check-circle-2" class="w-5 h-5 text-brand-600"></i>
+                Traitement extrait avec succès (3 médicaments)
+              </h4>
+              <span class="text-xs font-bold text-brand-700 bg-brand-100 px-2.5 py-1 rounded-full">Total: 7 850 FCFA</span>
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-slate-200">
+                <span class="font-semibold text-slate-800">1. Coartem 80/480mg (1 boîte)</span>
+                <span class="font-bold text-slate-900">3 800 FCFA</span>
+              </div>
+              <div class="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-slate-200">
+                <span class="font-semibold text-slate-800">2. Paracétamol 1g (1 boîte)</span>
+                <span class="font-bold text-slate-900">1 200 FCFA</span>
+              </div>
+              <div class="flex items-center justify-between text-xs bg-white p-2.5 rounded-xl border border-slate-200">
+                <span class="font-semibold text-slate-800">3. Spasfon Lyoc 80mg (1 boîte)</span>
+                <span class="font-bold text-slate-900">2 850 FCFA</span>
+              </div>
+            </div>
+
+            <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3">
+              <div class="text-xs space-y-0.5">
+                <p class="font-bold text-emerald-900">Pharmacie recommandée : Pharmacie de la Riviera 3</p>
+                <p class="text-emerald-700">De garde 24h/24 • À 1.2 km de votre position • Les 3 produits sont 100% disponibles</p>
+              </div>
+              <button onclick="openReservationModal('Pharmacie de la Riviera 3', 'Traitement Complet Ordonnance', 7850)" class="bg-ciorange-500 hover:bg-ciorange-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-xs whitespace-nowrap transition">
+                Réserver l'Ordonnance
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- MODULE 3: RENDEZ-VOUS & MOBILE MONEY       -->
+    <!-- ========================================== -->
+    <section id="tab-rdv" class="tab-content hidden flex-1 flex flex-col gap-6">
+      
+      <!-- Doctor Search Header -->
+      <div class="bg-white p-4 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="space-y-1 text-center md:text-left">
+          <h2 class="font-display text-xl sm:text-2xl font-extrabold text-slate-900">Prendre Rendez-vous avec un Praticien</h2>
+          <p class="text-xs text-slate-500">Consultations en cabinet ou hôpital à Abidjan avec paiement Mobile Money sécurisé.</p>
+        </div>
+
+        <!-- Specialty Filter Pills -->
+        <div class="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+          <select id="doctor-spec-filter" onchange="filterDoctors(this.value)" class="bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="all">🩺 Toutes les spécialités</option>
+            <option value="Generaliste">Médecin Généraliste</option>
+            <option value="Pediatre">Pédiatre</option>
+            <option value="Cardiologue">Cardiologue</option>
+            <option value="Gynecologue">Gynécologue</option>
+            <option value="Ophtalmologue">Ophtalmologue</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Doctors Cards Grid -->
+      <div id="doctors-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Dynamically populated by JS -->
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- MODULE 4: CARNET DE SANTÉ NUMÉRIQUE         -->
+    <!-- ========================================== -->
+    <section id="tab-carnet" class="tab-content hidden flex-1 flex flex-col gap-6">
+      
+      <!-- Patient Banner Card -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl relative overflow-hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 relative z-10">
+          
+          <div class="flex items-center gap-4">
+            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-brand-500 border-2 border-white/30 flex items-center justify-center font-display font-extrabold text-2xl text-white shadow-lg">
+              JK
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <h2 class="font-display font-bold text-xl sm:text-2xl">Jean-Emmanuel KOUADIO</h2>
+                <span class="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-500 text-white rounded-full">CNAM ACTIF</span>
+              </div>
+              <p class="text-xs text-slate-300">N° Assuré CNAM : <span class="font-mono font-bold text-white">CI-84920491-01</span></p>
+              <div class="flex items-center gap-3 text-xs text-slate-300 pt-1">
+                <span>34 ans (M)</span>
+                <span>•</span>
+                <span>Abidjan, Cocody</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Blood Group & Allergic Badge -->
+          <div class="flex items-center gap-3">
+            <div class="bg-red-500/20 border border-red-500/40 p-3 rounded-2xl text-center min-w-[70px]">
+              <span class="block text-[10px] uppercase font-semibold text-red-300">Groupe</span>
+              <span class="text-xl font-black text-red-400">O+</span>
+            </div>
+            <div class="bg-amber-500/20 border border-amber-500/40 p-3 rounded-2xl text-center">
+              <span class="block text-[10px] uppercase font-semibold text-amber-300">Allergies</span>
+              <span class="text-xs font-bold text-amber-200">Pénicilline</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Vitals Grid -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-medium">Tension Artérielle</span>
+            <i data-lucide="activity" class="w-4 h-4 text-brand-600"></i>
+          </div>
+          <p class="text-xl font-extrabold text-slate-900">12 / 8 <span class="text-xs font-normal text-slate-500">mmHg</span></p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md">Normale</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-medium">Poids</span>
+            <i data-lucide="scale" class="w-4 h-4 text-sky-600"></i>
+          </div>
+          <p class="text-xl font-extrabold text-slate-900">76.5 <span class="text-xs font-normal text-slate-500">kg</span></p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-md">IMC 24.2 (Stable)</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-medium">Glycémie à jeun</span>
+            <i data-lucide="droplet" class="w-4 h-4 text-ciorange-500"></i>
+          </div>
+          <p class="text-xl font-extrabold text-slate-900">0.95 <span class="text-xs font-normal text-slate-500">g/L</span></p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md">Normal</span>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
+          <div class="flex items-center justify-between text-xs text-slate-500">
+            <span class="font-medium">Pouls / Rythme</span>
+            <i data-lucide="heart-pulse" class="w-4 h-4 text-red-500"></i>
+          </div>
+          <p class="text-xl font-extrabold text-slate-900">72 <span class="text-xs font-normal text-slate-500">BPM</span></p>
+          <span class="inline-block px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md">Régulier</span>
+        </div>
+
+      </div>
+
+      <!-- Prescriptions & Upcoming Appointments Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Ordonnances Enregistrées -->
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-bold text-base text-slate-900 flex items-center gap-2">
+              <i data-lucide="file-text" class="w-5 h-5 text-brand-600"></i>
+              Historique des Ordonnances
+            </h3>
+            <button onclick="switchTab('stock')" class="text-xs font-bold text-brand-600 hover:underline">Scanner nouvelle</button>
+          </div>
+
+          <div class="space-y-3">
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
+              <div class="space-y-1">
+                <span class="text-xs font-bold text-slate-900">Ordonnance Traitement Paludisme</span>
+                <p class="text-[11px] text-slate-500">Prescrit par Dr. Koffi Armand • 12 Sept 2026</p>
+                <div class="flex items-center gap-2 text-[10px] text-slate-600 pt-1">
+                  <span class="bg-white px-2 py-0.5 rounded-md border">Coartem 80/480</span>
+                  <span class="bg-white px-2 py-0.5 rounded-md border">Paracétamol 1g</span>
+                </div>
+              </div>
+              <button onclick="alert('Téléchargement de l\'ordonnance PDF...')" class="p-2 text-slate-500 hover:text-brand-600 hover:bg-white rounded-xl transition">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between gap-3">
+              <div class="space-y-1">
+                <span class="text-xs font-bold text-slate-900">Infection ORL - Antibiotique</span>
+                <p class="text-[11px] text-slate-500">Prescrit par Dr. Aminata Touré • 04 Juin 2026</p>
+                <div class="flex items-center gap-2 text-[10px] text-slate-600 pt-1">
+                  <span class="bg-white px-2 py-0.5 rounded-md border">Amoxicilline 500mg</span>
+                </div>
+              </div>
+              <button onclick="alert('Téléchargement de l\'ordonnance PDF...')" class="p-2 text-slate-500 hover:text-brand-600 hover:bg-white rounded-xl transition">
+                <i data-lucide="download" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Prochains Rendez-vous & Rappels Vaccins -->
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-display font-bold text-base text-slate-900 flex items-center gap-2">
+              <i data-lucide="bell" class="w-5 h-5 text-ciorange-500"></i>
+              Prochains RDV & Rappels Vaccins
+            </h3>
+            <button onclick="switchTab('rdv')" class="text-xs font-bold text-ciorange-500 hover:underline">+ Prendre RDV</button>
+          </div>
+
+          <div class="space-y-3">
+            <div class="p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                15 OCT
+              </div>
+              <div class="space-y-0.5 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-amber-950">Rappel Vaccin Fièvre Jaune</span>
+                  <span class="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">Dans 15 jours</span>
+                </div>
+                <p class="text-[11px] text-amber-800">Institut Pasteur de Côte d'Ivoire (Cocody)</p>
+              </div>
+            </div>
+
+            <div class="p-3.5 bg-sky-50/60 rounded-2xl border border-sky-200 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-medblue-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                05 OCT
+              </div>
+              <div class="space-y-0.5 flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-sky-950">Consultation Généraliste</span>
+                  <span class="text-[10px] font-bold bg-sky-200 text-sky-900 px-2 py-0.5 rounded-full">10:00 AM</span>
+                </div>
+                <p class="text-[11px] text-sky-800">Dr. Koffi Armand • Polyclinique PISAM</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MOBILE BOTTOM NAVIGATION BAR               -->
+  <!-- ========================================== -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-effect border-t border-slate-200/80 px-2 py-1.5 flex items-center justify-around shadow-lg">
+    <button id="mob-btn-map" onclick="switchTab('map')" class="mob-tab-btn flex flex-col items-center gap-1 p-2 text-brand-600 font-bold text-[10px]">
+      <i data-lucide="map-pin" class="w-5 h-5"></i>
+      <span>Carte</span>
+    </button>
+    <button id="mob-btn-stock" onclick="switchTab('stock')" class="mob-tab-btn flex flex-col items-center gap-1 p-2 text-slate-500 font-medium text-[10px]">
+      <i data-lucide="pill" class="w-5 h-5"></i>
+      <span>Stocks</span>
+    </button>
+    <button id="mob-btn-rdv" onclick="switchTab('rdv')" class="mob-tab-btn flex flex-col items-center gap-1 p-2 text-slate-500 font-medium text-[10px]">
+      <i data-lucide="calendar" class="w-5 h-5"></i>
+      <span>RDV Médical</span>
+    </button>
+    <button id="mob-btn-carnet" onclick="switchTab('carnet')" class="mob-tab-btn flex flex-col items-center gap-1 p-2 text-slate-500 font-medium text-[10px]">
+      <i data-lucide="user-check" class="w-5 h-5"></i>
+      <span>Carnet</span>
+    </button>
+  </nav>
+
+  <!-- ========================================== -->
+  <!-- MODAL 1: ESTABLISHMENT DETAILS / SHEET      -->
+  <!-- ========================================== -->
+  <div id="modal-detail" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5 transform transition-all duration-300 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-start justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2" id="modal-status-badge">
+            <!-- Dynamic Status Pill -->
+          </div>
+          <h3 id="modal-title" class="font-display font-bold text-xl text-slate-900">Nom de la Pharmacie</h3>
+          <p id="modal-address" class="text-xs text-slate-500 flex items-center gap-1">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-brand-600"></i> Adresse complète
+          </p>
+        </div>
+        <button onclick="closeModal('modal-detail')" class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Distance & Travel Time info -->
+      <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-center">
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Distance approximative</span>
+          <p id="modal-distance" class="text-sm font-extrabold text-slate-900">1.2 km</p>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Temps de trajet est.</span>
+          <p id="modal-time" class="text-sm font-extrabold text-brand-700">5 min en voiture</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="space-y-2.5">
+        <a id="modal-gps-btn" href="#" target="_blank" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 transition">
+          <i data-lucide="navigation" class="w-4 h-4"></i>
+          <span>Y aller (Itinéraire Google Maps)</span>
+        </a>
+
+        <a id="modal-phone-btn" href="#" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition">
+          <i data-lucide="phone" class="w-4 h-4 text-slate-600"></i>
+          <span id="modal-phone-text">Appeler l'établissement</span>
+        </a>
+
+        <button onclick="verifyStockModal()" class="w-full border border-slate-200 hover:border-brand-500 hover:bg-brand-50 text-slate-700 font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition">
+          <i data-lucide="pill" class="w-4 h-4 text-brand-600"></i>
+          <span>Vérifier la disponibilité d'un médicament</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 2: MOBILE MONEY PAYMENT SIMULATOR     -->
+  <!-- ========================================== -->
+  <div id="modal-payment" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-ciorange-500 text-white flex items-center justify-center font-bold">
+            <i data-lucide="credit-card" class="w-4 h-4"></i>
+          </div>
+          <h3 class="font-display font-bold text-lg text-slate-900">Paiement Mobile Money CI</h3>
+        </div>
+        <button onclick="closeModal('modal-payment')" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-full">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Payment Summary -->
+      <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-1">
+        <span class="text-xs text-slate-500 font-medium" id="pay-item-title">Consultation Médicale</span>
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs text-slate-600" id="pay-provider-name">Dr. Koffi Armand</span>
+          <span class="font-display font-extrabold text-xl text-slate-900" id="pay-amount-display">15 000 FCFA</span>
+        </div>
+      </div>
+
+      <!-- Operator Choice Grid (Wave, Orange, MTN, Moov) -->
+      <div class="space-y-2">
+        <label class="block text-xs font-bold text-slate-700">Choisissez votre moyen de paiement :</label>
+        <div class="grid grid-cols-2 gap-2.5">
+          
+          <!-- Wave -->
+          <button onclick="selectOperator('wave')" id="op-wave" class="op-btn p-3 rounded-2xl border-2 border-slate-200 hover:border-[#00C4EE] flex items-center gap-3 text-left transition bg-white">
+            <div class="w-8 h-8 rounded-xl bg-[#00C4EE] text-white font-black text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
+              🌊
+            </div>
+            <div>
+              <span class="block text-xs font-extrabold text-slate-900">Wave</span>
+              <span class="text-[10px] text-slate-500">0% de frais</span>
+            </div>
+          </button>
+
+          <!-- Orange Money -->
+          <button onclick="selectOperator('orange')" id="op-orange" class="op-btn p-3 rounded-2xl border-2 border-slate-200 hover:border-[#FF6600] flex items-center gap-3 text-left transition bg-white">
+            <div class="w-8 h-8 rounded-xl bg-[#FF6600] text-white font-black text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
+              🍊
+            </div>
+            <div>
+              <span class="block text-xs font-extrabold text-slate-900">Orange Money</span>
+              <span class="text-[10px] text-slate-500">#144#</span>
+            </div>
+          </button>
+
+          <!-- MTN MoMo -->
+          <button onclick="selectOperator('mtn')" id="op-mtn" class="op-btn p-3 rounded-2xl border-2 border-slate-200 hover:border-[#FFCC00] flex items-center gap-3 text-left transition bg-white">
+            <div class="w-8 h-8 rounded-xl bg-[#FFCC00] text-slate-900 font-black text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
+              💛
+            </div>
+            <div>
+              <span class="block text-xs font-extrabold text-slate-900">MTN MoMo</span>
+              <span class="text-[10px] text-slate-500">*133#</span>
+            </div>
+          </button>
+
+          <!-- Moov Money -->
+          <button onclick="selectOperator('moov')" id="op-moov" class="op-btn p-3 rounded-2xl border-2 border-slate-200 hover:border-[#0055A5] flex items-center gap-3 text-left transition bg-white">
+            <div class="w-8 h-8 rounded-xl bg-[#0055A5] text-white font-black text-xs flex items-center justify-center flex-shrink-0 shadow-xs">
+              💙
+            </div>
+            <div>
+              <span class="block text-xs font-extrabold text-slate-900">Moov Money</span>
+              <span class="text-[10px] text-slate-500">*155#</span>
+            </div>
+          </button>
+
+        </div>
+      </div>
+
+      <!-- Phone Number Input -->
+      <div class="space-y-1.5">
+        <label class="block text-xs font-bold text-slate-700">Numéro de téléphone Côte d'Ivoire (+225) :</label>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">+225</span>
+          <input type="tel" id="pay-phone-input" placeholder="07 08 09 10 11" value="07 89 45 12 30" class="w-full pl-14 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-ciorange-500 focus:outline-none">
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <button onclick="processPayment()" id="pay-submit-btn" class="w-full bg-ciorange-500 hover:bg-ciorange-600 text-white font-bold text-xs py-3.5 px-4 rounded-xl shadow-lg shadow-ciorange-500/30 flex items-center justify-center gap-2 transition active:scale-95">
+        <i data-lucide="check-circle" class="w-4 h-4"></i>
+        <span id="pay-btn-text">Confirmer le paiement (15 000 FCFA)</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 3: DIGITAL RECEIPT / CONFIRMATION     -->
+  <!-- ========================================== -->
+  <div id="modal-receipt" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl border border-slate-200 shadow-2xl p-6 space-y-5 text-center">
+      
+      <!-- Success Icon -->
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-md animate-bounce">
+        <i data-lucide="check" class="w-10 h-10 stroke-[3]"></i>
+      </div>
+
+      <div class="space-y-1">
+        <span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full uppercase tracking-wider">Paiement Confirmé !</span>
+        <h3 class="font-display font-extrabold text-xl text-slate-900">Reçu Numérique Digital</h3>
+        <p class="text-xs text-slate-500">Un SMS de confirmation a été envoyé sur votre mobile.</p>
+      </div>
+
+      <!-- Receipt Voucher Container -->
+      <div class="bg-slate-50 border border-dashed border-slate-300 p-4 rounded-2xl text-left space-y-2 text-xs">
+        <div class="flex justify-between border-b border-slate-200 pb-2">
+          <span class="text-slate-500">N° Transaction :</span>
+          <span class="font-mono font-bold text-slate-900" id="rec-id">TXN-2026-CI-89412</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Service :</span>
+          <span class="font-bold text-slate-800" id="rec-service">Consultation Dr. Koffi</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Opérateur :</span>
+          <span class="font-bold text-slate-800" id="rec-op">Wave Money</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Montant Débité :</span>
+          <span class="font-bold text-emerald-700" id="rec-amount">15 000 FCFA</span>
+        </div>
+        <div class="flex justify-between pt-1 border-t border-slate-200">
+          <span class="text-slate-500">Statut :</span>
+          <span class="font-extrabold text-emerald-600">VALIDÉ 🟢</span>
+        </div>
+      </div>
+
+      <div class="pt-2 space-y-2">
+        <button onclick="closeModal('modal-receipt'); switchTab('carnet')" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs py-3 rounded-xl shadow-md transition">
+          Voir dans Mon Carnet de Santé
+        </button>
+        <button onclick="closeModal('modal-receipt')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-2.5 rounded-xl transition">
+          Fermer
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JavaScript App Logic -->
+  <script>
+    // ==========================================
+    // 1. SIMULATED DATA (ABIDJAN ESTABLISHMENTS)
+    // ==========================================
+    const establishments = [
+      {
+        id: 1,
+        name: "Pharmacie de la Riviera 3",
+        commune: "Cocody",
+        address: "Cocody Riviera 3, Boulevard de France, près d'Anono",
+        lat: 5.3582,
+        lng: -3.9654,
+        status: "De Garde (24h/24)",
+        statusType: "garde",
+        phone: "+225 27 22 47 12 00",
+        distance: "1.2 km",
+        time: "5 min",
+        medicines: ["Coartem", "Paracétamol", "Amoxicilline", "Efferalgan", "Spasfon"]
+      },
+      {
+        id: 2,
+        name: "Pharmacie Saint Jean",
+        commune: "Cocody",
+        address: "Cocody Saint Jean, Carrefour Saint Jean",
+        lat: 5.3485,
+        lng: -3.9921,
+        status: "Ouvert (Jusqu'à 21h)",
+        statusType: "ouvert",
+        phone: "+225 27 22 44 33 10",
+        distance: "2.5 km",
+        time: "8 min",
+        medicines: ["Paracétamol", "Efferalgan", "Ibuprofène", "Doliprane"]
+      },
+      {
+        id: 3,
+        name: "Pharmacie du Plateau",
+        commune: "Plateau",
+        address: "Plateau Avenue Chardy, près de la Pyramide",
+        lat: 5.3234,
+        lng: -4.0211,
+        status: "De Garde (24h/24)",
+        statusType: "garde",
+        phone: "+225 27 20 21 05 40",
+        distance: "4.1 km",
+        time: "12 min",
+        medicines: ["Coartem", "Amoxicilline", "Spasfon", "Augmentin"]
+      },
+      {
+        id: 4,
+        name: "Pharmacie des Grâces",
+        commune: "Yopougon",
+        address: "Yopougon Maroc, Carrefour Antenne",
+        lat: 5.3421,
+        lng: -4.0723,
+        status: "Ouvert (Jusqu'à 22h)",
+        statusType: "ouvert",
+        phone: "+225 27 23 45 89 12",
+        distance: "6.8 km",
+        time: "18 min",
+        medicines: ["Paracétamol", "Ibuprofène", "Coartem"]
+      },
+      {
+        id: 5,
+        name: "Pharmacie Zone 4",
+        commune: "Marcory",
+        address: "Marcory Zone 4, Boulevard de Marseille",
+        lat: 5.3012,
+        lng: -3.9856,
+        status: "De Garde (24h/24)",
+        statusType: "garde",
+        phone: "+225 27 21 35 66 90",
+        distance: "5.0 km",
+        time: "14 min",
+        medicines: ["Coartem", "Paracétamol", "Augmentin", "Maalox"]
+      },
+      {
+        id: 6,
+        name: "Polyclinique Sainte Anne-Marie (PISAM)",
+        commune: "Cocody",
+        address: "Cocody Mermoz, Rue des Ambassades",
+        lat: 5.3412,
+        lng: -3.9978,
+        status: "CHU / Urgences 24h",
+        statusType: "chu",
+        phone: "+225 27 22 48 31 31",
+        distance: "3.0 km",
+        time: "9 min",
+        medicines: ["Services Urgences", "Consultations"]
+      },
+      {
+        id: 7,
+        name: "CHU de Cocody",
+        commune: "Cocody",
+        address: "Cocody Boulevard de l'Université",
+        lat: 5.3510,
+        lng: -3.9870,
+        status: "CHU Public (24h/24)",
+        statusType: "chu",
+        phone: "+225 27 22 44 91 00",
+        distance: "2.1 km",
+        time: "7 min",
+        medicines: ["Services Urgences CHU"]
+      },
+      {
+        id: 8,
+        name: "CHU de Treichville",
+        commune: "Treichville",
+        address: "Treichville Boulevard de Marseille",
+        lat: 5.3080,
+        lng: -4.0090,
+        status: "CHU Public (24h/24)",
+        statusType: "chu",
+        phone: "+225 27 21 24 91 55",
+        distance: "5.5 km",
+        time: "15 min",
+        medicines: ["Urgences CHU"]
+      },
+      {
+        id: 9,
+        name: "Polyclinique Internationale Farah",
+        commune: "Marcory",
+        address: "Marcory Résidentiel, Rue de la Paix",
+        lat: 5.3060,
+        lng: -3.9780,
+        status: "Clinique Privée 24h",
+        statusType: "chu",
+        phone: "+225 27 21 21 61 61",
+        distance: "4.8 km",
+        time: "13 min",
+        medicines: ["Consultations", "Hospitalisation"]
+      }
+    ];
+
+    // ==========================================
+    // 2. MEDICINES CATALOG DATA
+    // ==========================================
+    const medicinesCatalog = [
+      { id: 101, name: "Paracétamol Biogaran 1g", dosage: "Boîte de 8 gélules", price: 1200, stock: "En stock 🟢", pharmacy: "Pharmacie de la Riviera 3", distance: "1.2 km" },
+      { id: 102, name: "Coartem 80/480mg (Antipaludéen)", dosage: "Boîte de 6 comprimés", price: 3800, stock: "En stock 🟢", pharmacy: "Pharmacie de la Riviera 3", distance: "1.2 km" },
+      { id: 103, name: "Amoxicilline Biogaran 500mg", dosage: "Boîte de 12 gélules", price: 2450, stock: "Stock limité 🟠", pharmacy: "Pharmacie Saint Jean", distance: "2.5 km" },
+      { id: 104, name: "Efferalgan 1g Effervescent", dosage: "Tube de 16 comprimés", price: 1850, stock: "En stock 🟢", pharmacy: "Pharmacie du Plateau", distance: "4.1 km" },
+      { id: 105, name: "Spasfon Lyoc 80mg", dosage: "Boîte de 10 lyophilisats", price: 2900, stock: "En stock 🟢", pharmacy: "Pharmacie Zone 4", distance: "5.0 km" },
+      { id: 106, name: "Ibuprofène Mylan 400mg", dosage: "Boîte de 20 comprimés", price: 2100, stock: "En stock 🟢", pharmacy: "Pharmacie des Grâces", distance: "6.8 km" },
+    ];
+
+    // ==========================================
+    // 3. DOCTORS DIRECTORY DATA
+    // ==========================================
+    const doctorsList = [
+      {
+        id: 201,
+        name: "Dr. Koffi Armand",
+        specialty: "Generaliste",
+        specLabel: "Médecin Généraliste",
+        hospital: "Polyclinique PISAM (Cocody)",
+        fee: 15000,
+        rating: "4.9 ★ (124 avis)",
+        slot: "Aujourd'hui à 14:30"
+      },
+      {
+        id: 202,
+        name: "Dr. Aminata Touré",
+        specialty: "Pediatre",
+        specLabel: "Pédiatre Spécialiste",
+        hospital: "Clinique Farah (Marcory)",
+        fee: 20000,
+        rating: "4.9 ★ (98 avis)",
+        slot: "Demain à 10:00"
+      },
+      {
+        id: 203,
+        name: "Dr. Jean-Luc Kouassi",
+        specialty: "Cardiologue",
+        specLabel: "Cardiologue Intervenant",
+        hospital: "CHU de Cocody",
+        fee: 25000,
+        rating: "4.8 ★ (85 avis)",
+        slot: "Vendredi 03 Oct à 09:00"
+      },
+      {
+        id: 204,
+        name: "Dr. Marie-Josée Yao",
+        specialty: "Gynecologue",
+        specLabel: "Gynécologue-Obstétricienne",
+        hospital: "Polyclinique Avicenne (Marcory)",
+        fee: 22000,
+        rating: "5.0 ★ (140 avis)",
+        slot: "Demain à 15:15"
+      },
+      {
+        id: 205,
+        name: "Dr. Ibrahim Koné",
+        specialty: "Ophtalmologue",
+        specLabel: "Ophtalmologue",
+        hospital: "Centre Médical du Plateau",
+        fee: 18000,
+        rating: "4.7 ★ (62 avis)",
+        slot: "Aujourd'hui à 16:00"
+      }
+    ];
+
+    // Global State
+    let map = null;
+    let mapMarkers = [];
+    let currentOperator = 'wave';
+    let currentPayItem = { title: '', provider: '', amount: 0 };
+
+    // ==========================================
+    // INITIALIZATION ON DOM LOAD
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initMap();
+      renderEstablishments(establishments);
+      renderDrugs(medicinesCatalog);
+      renderDoctors(doctorsList);
+    });
+
+    // ==========================================
+    // MAP INITIALIZATION (LEAFLET.JS)
+    // ==========================================
+    function initMap() {
+      // Abidjan coordinates: 5.3485, -3.9870
+      map = L.map('leaflet-map', {
+        zoomControl: true,
+        scrollWheelZoom: true
+      }).setView([5.3450, -4.0000], 12);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap & PharmaSanté CI'
+      }).addTo(map);
+
+      // Render Pins
+      updateMapMarkers(establishments);
+    }
+
+    function updateMapMarkers(items) {
+      // Clear existing markers
+      mapMarkers.forEach(m => map.removeLayer(m));
+      mapMarkers = [];
+
+      items.forEach(est => {
+        let pinColor = est.statusType === 'garde' ? '#059669' : (est.statusType === 'chu' ? '#0284C7' : '#0d9488');
+        
+        const customIcon = L.divIcon({
+          className: 'custom-leaflet-marker',
+          html: `<div style="background-color: ${pinColor};" class="w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold text-xs pulse-glow">
+                  ${est.statusType === 'chu' ? '🏥' : '💊'}
+                 </div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        });
+
+        const marker = L.marker([est.lat, est.lng], { icon: customIcon }).addTo(map);
+        
+        // Popup Content
+        const popupHtml = `
+          <div class="p-2 space-y-1.5 min-w-[200px]">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${est.statusType === 'garde' ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}">
+              ${est.status}
+            </span>
+            <h4 class="font-bold text-xs text-slate-900">${est.name}</h4>
+            <p class="text-[11px] text-slate-500">${est.commune} • ${est.distance}</p>
+            <button onclick="openDetailModal(${est.id})" class="w-full mt-1 bg-brand-600 text-white font-bold text-[11px] py-1.5 rounded-lg shadow-xs">
+              Voir la fiche détaillée
+            </button>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+        mapMarkers.push(marker);
+      });
+    }
+
+    // ==========================================
+    // RENDER CARDS & LISTS
+    // ==========================================
+    function renderEstablishments(items) {
+      const container = document.getElementById('establishment-list');
+      if (!container) return;
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-8 rounded-2xl border border-slate-200 text-center space-y-2">
+            <i data-lucide="map-pin-off" class="w-8 h-8 text-slate-400 mx-auto"></i>
+            <p class="text-xs font-bold text-slate-600">Aucun établissement trouvé pour cette recherche.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = items.map(est => `
+        <div onclick="openDetailModal(${est.id})" class="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-brand-500/50 hover:shadow-md transition cursor-pointer space-y-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full ${est.statusType === 'garde' ? 'bg-emerald-500 animate-pulse' : 'bg-sky-500'}"></span>
+                <span class="text-[10px] font-bold uppercase tracking-wider ${est.statusType === 'garde' ? 'text-emerald-700' : 'text-sky-700'}">
+                  ${est.status}
+                </span>
+              </div>
+              <h3 class="font-display font-bold text-sm text-slate-900 mt-0.5">${est.name}</h3>
+              <p class="text-xs text-slate-500 truncate max-w-[260px]">${est.address}</p>
+            </div>
+            <span class="text-xs font-extrabold text-brand-700 bg-brand-50 px-2 py-1 rounded-lg flex-shrink-0">
+              ${est.distance}
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
+            <span class="text-slate-500 flex items-center gap-1 font-medium">
+              <i data-lucide="clock" class="w-3.5 h-3.5 text-slate-400"></i> ${est.time} de trajet
+            </span>
+            <span class="text-brand-600 font-bold flex items-center gap-1">
+              Fiche & GPS <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+            </span>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderDrugs(items) {
+      const container = document.getElementById('drug-results-container');
+      if (!container) return;
+
+      container.innerHTML = items.map(d => `
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs space-y-3 flex flex-col justify-between hover:shadow-md transition">
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${d.stock.includes('En stock') ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                ${d.stock}
+              </span>
+              <span class="text-xs text-slate-400 font-medium">${d.distance}</span>
+            </div>
+            <h4 class="font-display font-bold text-base text-slate-900">${d.name}</h4>
+            <p class="text-xs text-slate-500">${d.dosage}</p>
+            <p class="text-xs font-semibold text-brand-800 pt-1">📍 Disponible à : ${d.pharmacy}</p>
+          </div>
+
+          <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-bold">Prix unitaire</span>
+              <p class="text-lg font-extrabold text-slate-900">${d.price.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+            <button onclick="openReservationModal('${d.pharmacy}', '${d.name}', ${d.price})" class="bg-ciorange-500 hover:bg-ciorange-600 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-xs transition">
+              Réserver
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderDoctors(items) {
+      const container = document.getElementById('doctors-grid');
+      if (!container) return;
+
+      container.innerHTML = items.map(doc => `
+        <div class="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs space-y-4 flex flex-col justify-between hover:shadow-md transition">
+          <div class="space-y-3">
+            <div class="flex items-start gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-medblue-500 text-white font-bold flex items-center justify-center text-sm shadow-md flex-shrink-0">
+                ${doc.name.split(' ').map(n=>n[0]).join('')}
+              </div>
+              <div>
+                <span class="text-[10px] font-bold text-medblue-700 bg-sky-100 px-2 py-0.5 rounded-full uppercase">${doc.specLabel}</span>
+                <h3 class="font-display font-bold text-base text-slate-900 mt-1">${doc.name}</h3>
+                <p class="text-xs text-slate-500">${doc.hospital}</p>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
+              <span class="text-slate-600 font-medium">Prochain créneau :</span>
+              <span class="font-bold text-brand-700">${doc.slot}</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+            <div>
+              <span class="text-[10px] text-slate-400 uppercase font-bold">Tarif Consultation</span>
+              <p class="text-base font-extrabold text-slate-900">${doc.fee.toLocaleString('fr-FR')} FCFA</p>
+            </div>
+            <button onclick="openPaymentModal('${doc.name}', 'Consultation ${doc.specLabel}', ${doc.fee})" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-md shadow-brand-600/20 transition">
+              Prendre RDV
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    // ==========================================
+    // INTERACTION HANDLERS & NAVIGATION
+    // ==========================================
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+      // Update Desktop Nav styles
+      document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        btn.classList.remove('bg-white', 'text-brand-700', 'shadow-xs');
+        btn.classList.add('text-slate-600');
+      });
+      const activeDesktopBtn = document.getElementById(`nav-btn-${tabId}`);
+      if (activeDesktopBtn) {
+        activeDesktopBtn.classList.add('bg-white', 'text-brand-700', 'shadow-xs');
+        activeDesktopBtn.classList.remove('text-slate-600');
+      }
+
+      // Update Mobile Nav styles
+      document.querySelectorAll('.mob-tab-btn').forEach(btn => {
+        btn.classList.remove('text-brand-600', 'font-bold');
+        btn.classList.add('text-slate-500', 'font-medium');
+      });
+      const activeMobBtn = document.getElementById(`mob-btn-${tabId}`);
+      if (activeMobBtn) {
+        activeMobBtn.classList.add('text-brand-600', 'font-bold');
+        activeMobBtn.classList.remove('text-slate-500', 'font-medium');
+      }
+
+      if (tabId === 'map' && map) {
+        setTimeout(() => map.invalidateSize(), 200);
+      }
+    }
+
+    function switchStockSubtab(subtab) {
+      if (subtab === 'search') {
+        document.getElementById('stock-subtab-search').classList.remove('hidden');
+        document.getElementById('stock-subtab-scan').classList.add('hidden');
+        
+        document.getElementById('subtab-btn-search').className = "flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-xs";
+        document.getElementById('subtab-btn-scan').className = "flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900";
+      } else {
+        document.getElementById('stock-subtab-search').classList.add('hidden');
+        document.getElementById('stock-subtab-scan').classList.remove('hidden');
+
+        document.getElementById('subtab-btn-scan').className = "flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition bg-brand-600 text-white shadow-xs";
+        document.getElementById('subtab-btn-search').className = "flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition text-slate-600 hover:text-slate-900";
+      }
+    }
+
+    function filterMapCategory(cat) {
+      document.querySelectorAll('.map-cat-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-600', 'text-white');
+      });
+      
+      let filtered = establishments;
+      if (cat === 'garde') {
+        filtered = establishments.filter(e => e.statusType === 'garde');
+        document.getElementById('map-filter-garde').classList.add('bg-brand-600', 'text-white');
+      } else if (cat === 'chu') {
+        filtered = establishments.filter(e => e.statusType === 'chu');
+        document.getElementById('map-filter-chu').classList.add('bg-brand-600', 'text-white');
+      } else {
+        document.getElementById('map-filter-all').classList.add('bg-brand-600', 'text-white');
+      }
+
+      renderEstablishments(filtered);
+      updateMapMarkers(filtered);
+    }
+
+    function handleCommuneChange(commune) {
+      if (commune === 'all') {
+        renderEstablishments(establishments);
+        updateMapMarkers(establishments);
+        map.setView([5.3450, -4.0000], 12);
+      } else {
+        const filtered = establishments.filter(e => e.commune === commune);
+        renderEstablishments(filtered);
+        updateMapMarkers(filtered);
+        if (filtered.length > 0) {
+          map.setView([filtered[0].lat, filtered[0].lng], 13);
+        }
+      }
+    }
+
+    function searchPharmacies(query) {
+      const q = query.toLowerCase();
+      const clearBtn = document.getElementById('clear-search-btn');
+      clearBtn.classList.toggle('hidden', query.length === 0);
+
+      const filtered = establishments.filter(e => 
+        e.name.toLowerCase().includes(q) ||
+        e.commune.toLowerCase().includes(q) ||
+        e.address.toLowerCase().includes(q)
+      );
+
+      renderEstablishments(filtered);
+      updateMapMarkers(filtered);
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('map-search-input');
+      input.value = '';
+      searchPharmacies('');
+    }
+
+    function handleDrugSearch(query) {
+      const q = query.toLowerCase();
+      const filtered = medicinesCatalog.filter(d => 
+        d.name.toLowerCase().includes(q) || 
+        d.pharmacy.toLowerCase().includes(q)
+      );
+      renderDrugs(filtered);
+    }
+
+    function setDrugSearch(val) {
+      const input = document.getElementById('drug-search-input');
+      input.value = val;
+      handleDrugSearch(val);
+    }
+
+    function filterDoctors(spec) {
+      if (spec === 'all') {
+        renderDoctors(doctorsList);
+      } else {
+        const filtered = doctorsList.filter(d => d.specialty === spec);
+        renderDoctors(filtered);
+      }
+    }
+
+    // ==========================================
+    // MODAL HANDLERS & MAP GEOLOCATION
+    // ==========================================
+    function openDetailModal(id) {
+      const item = establishments.find(e => e.id === id);
+      if (!item) return;
+
+      document.getElementById('modal-title').textContent = item.name;
+      document.getElementById('modal-address').innerHTML = `<i data-lucide="map-pin" class="w-3.5 h-3.5 text-brand-600"></i> ${item.address}`;
+      document.getElementById('modal-distance').textContent = item.distance;
+      document.getElementById('modal-time').textContent = `${item.time} en voiture`;
+      document.getElementById('modal-gps-btn').href = `https://www.google.com/maps/dir/?api=1&destination=${item.lat},${item.lng}`;
+      document.getElementById('modal-phone-btn').href = `tel:${item.phone.replace(/\s+/g, '')}`;
+      document.getElementById('modal-phone-text').textContent = `Appeler : ${item.phone}`;
+
+      const badgeContainer = document.getElementById('modal-status-badge');
+      badgeContainer.innerHTML = `<span class="px-2.5 py-0.5 rounded-full text-xs font-bold ${item.statusType==='garde'?'bg-emerald-100 text-emerald-800':'bg-sky-100 text-sky-800'}">${item.status}</span>`;
+
+      document.getElementById('modal-detail').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    function verifyStockModal() {
+      closeModal('modal-detail');
+      switchTab('stock');
+    }
+
+    function getUserLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            map.setView([lat, lng], 14);
+            L.marker([lat, lng]).addTo(map).bindPopup('Votre position actuelle').openPopup();
+          },
+          () => {
+            alert('Impossible d\'accéder à votre géolocalisation. Zoom par défaut sur Abidjan Cocody.');
+          }
+        );
+      }
+    }
+
+    // ==========================================
+    // PRESCRIPTION SCAN SIMULATION
+    // ==========================================
+    function triggerFileInput() {
+      document.getElementById('prescription-file').click();
+    }
+
+    function handlePrescriptionFile(files) {
+      if (!files || files.length === 0) return;
+      
+      const previewBox = document.getElementById('scan-preview-box');
+      const dropZone = document.getElementById('drop-zone');
+      const progressBar = document.getElementById('scan-progress-bar');
+      const statusText = document.getElementById('scan-status-text');
+      const resultsBox = document.getElementById('scan-results-box');
+
+      dropZone.classList.add('hidden');
+      previewBox.classList.remove('hidden');
+      resultsBox.classList.add('hidden');
+
+      // Demo Preview Image
+      document.getElementById('preview-img').src = 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=300&auto=format&fit=crop&q=80';
+
+      // Simulation sequence
+      progressBar.style.width = '30%';
+      statusText.textContent = 'Lecture du fichier...';
+
+      setTimeout(() => {
+        progressBar.style.width = '70%';
+        statusText.textContent = 'Extraction des médicaments avec IA...';
+      }, 1000);
+
+      setTimeout(() => {
+        progressBar.style.width = '100%';
+        statusText.textContent = 'Correspondance avec la pharmacie de garde...';
+      }, 2000);
+
+      setTimeout(() => {
+        previewBox.classList.add('hidden');
+        resultsBox.classList.remove('hidden');
+        lucide.createIcons();
+      }, 2800);
+    }
+
+    // ==========================================
+    // MOBILE MONEY PAYMENT SYSTEM SIMULATOR
+    // ==========================================
+    function openReservationModal(pharmacy, itemTitle, price) {
+      openPaymentModal(pharmacy, itemTitle, price);
+    }
+
+    function openPaymentModal(provider, title, amount) {
+      currentPayItem = { provider, title, amount };
+      
+      document.getElementById('pay-item-title').textContent = title;
+      document.getElementById('pay-provider-name').textContent = provider;
+      document.getElementById('pay-amount-display').textContent = `${amount.toLocaleString('fr-FR')} FCFA`;
+      document.getElementById('pay-btn-text').textContent = `Confirmer le paiement (${amount.toLocaleString('fr-FR')} FCFA)`;
+
+      selectOperator('wave');
+      document.getElementById('modal-payment').classList.remove('hidden');
+    }
+
+    function selectOperator(op) {
+      currentOperator = op;
+      document.querySelectorAll('.op-btn').forEach(btn => btn.classList.remove('border-brand-600', 'bg-slate-50', 'ring-2', 'ring-brand-400'));
+      
+      const selectedBtn = document.getElementById(`op-${op}`);
+      if (selectedBtn) {
+        selectedBtn.classList.add('bg-slate-50', 'ring-2', 'ring-brand-400');
+      }
+    }
+
+    function processPayment() {
+      const phone = document.getElementById('pay-phone-input').value;
+      if (!phone || phone.length < 8) {
+        alert('Veuillez saisir un numéro de téléphone valide.');
+        return;
+      }
+
+      const submitBtn = document.getElementById('pay-submit-btn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Traitement Mobile Money...`;
+      lucide.createIcons();
+
+      setTimeout(() => {
+        closeModal('modal-payment');
+        submitBtn.disabled = false;
+
+        // Populate receipt
+        document.getElementById('rec-id').textContent = `TXN-2026-CI-${Math.floor(10000 + Math.random() * 90000)}`;
+        document.getElementById('rec-service').textContent = currentPayItem.title;
+        document.getElementById('rec-op').textContent = `${currentOperator.toUpperCase()} Money (${phone})`;
+        document.getElementById('rec-amount').textContent = `${currentPayItem.amount.toLocaleString('fr-FR')} FCFA`;
+
+        document.getElementById('modal-receipt').classList.remove('hidden');
+
+        // Trigger victory confetti
+        confetti({
+          particleCount: 80,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
+
+      }, 2000);
+    }
+  </script>
+</body>
+</html>
